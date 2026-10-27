@@ -29,7 +29,8 @@ BODY="$(printf '%s' "${ASC_KEY_P8:-}" | sed 's/\\n/ /g; s/-----[^-]*-----//g' | 
 chmod 600 "$ASC_KEY_PATH"
 [ -n "${ASC_KEY_ID:-}" ]     && ok "key id set"     || fail "ASC_KEY_ID missing"
 [ -n "${ASC_ISSUER_ID:-}" ]  && ok "issuer id set"  || fail "ASC_ISSUER_ID missing"
-grep -q 'BEGIN PRIVATE KEY' "$ASC_KEY_PATH" && ok ".p8 key looks valid" || fail "ASC_KEY_P8 is not a .p8 private key"
+if [ -n "$BODY" ] && openssl pkey -in "$ASC_KEY_PATH" -noout 2>/dev/null; then ok ".p8 key is a valid private key"
+else fail "ASC_KEY_P8 missing or not a .p8 private key"; fi
 [ -n "${BUNDLE_ID:-}" ] && ok "bundle id set" || fail "BUNDLE_ID missing"
 env_out ASC_KEY_PATH "$ASC_KEY_PATH"
 
