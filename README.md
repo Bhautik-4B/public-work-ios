@@ -39,7 +39,8 @@ bash scripts/set-secrets.sh suum    # then pillowo, splik
 | Secret | Env | Value |
 | --- | --- | --- |
 | `PRIVATE_REPO` | `<app>` | `owner/repo` of the app's private repo |
-| `PRIVATE_REPO_TOKEN` | `<app>` | Read-only token for that repo (see below) |
+| `PRIVATE_REPO_TOKEN` | repo-level (shared) | Read-only token for that repo (see below) |
+| `PRIVATE_REF` | `<app>` | Branch built by default (optional; e.g. `testflight-productions`) |
 | `BUNDLE_ID` | both | e.g. `com.company.app` |
 | `TEAM_ID` | `<app>` | Apple Team ID (optional in manual signing: taken from the profile) |
 | `ASC_KEY_ID` | both | App Store Connect API key ID |

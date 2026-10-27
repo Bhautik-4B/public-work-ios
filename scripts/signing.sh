@@ -56,10 +56,23 @@ printf '%s' "$BUILD_PROVISION_PROFILE" | base64 --decode > "$PP_PATH" 2>/dev/nul
 security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
 security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-if security import "$CERT_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH" >/dev/null 2>&1; then
+import_p12() { security import "$1" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH" >/dev/null 2>&1; }
+if import_p12 "$CERT_PATH"; then
   ok "certificate imported (P12_PASSWORD correct)"
 else
-  fail "cannot import CERTIFICATES_P12 - wrong P12_PASSWORD, or make the .p12 with 'openssl pkcs12 -export -legacy'"
+  # A .p12 made by OpenSSL 3 (modern encryption) is rejected by the keychain:
+  # re-pack it in the legacy format with Homebrew's OpenSSL 3 and retry.
+  OSSL="$(ls /opt/homebrew/bin/openssl /usr/local/bin/openssl 2>/dev/null | head -n1)"
+  PEM="$RUNNER_TEMP/dist.pem"; LEGACY="$RUNNER_TEMP/dist-legacy.p12"
+  if [ -n "$OSSL" ] \
+    && "$OSSL" pkcs12 -in "$CERT_PATH" -passin env:P12_PASSWORD -nodes -out "$PEM" 2>/dev/null \
+    && "$OSSL" pkcs12 -export -legacy -in "$PEM" -out "$LEGACY" -passout env:P12_PASSWORD 2>/dev/null \
+    && import_p12 "$LEGACY"; then
+    ok "certificate imported (re-packed to legacy format)"
+  else
+    fail "cannot import CERTIFICATES_P12 - wrong P12_PASSWORD or not a .p12"
+  fi
+  rm -f "$PEM" "$LEGACY"
 fi
 security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null 2>&1
 security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')

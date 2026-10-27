@@ -18,7 +18,7 @@ on:
         type: choice
         options: [suum, pillowo, splik]
       ref:
-        description: Branch / tag / commit of the private repo (empty = its default branch)
+        description: Branch / tag / commit of the private repo (empty = the PRIVATE_REF secret, else the default branch)
         required: false
         default: ""
       version:
@@ -72,7 +72,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ secrets.PRIVATE_REPO }}
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.ref != '' && inputs.ref || secrets.PRIVATE_REF }}
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: src
           persist-credentials: false
