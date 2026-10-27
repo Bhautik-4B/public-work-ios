@@ -53,6 +53,12 @@ jobs:
       FASTLANE_HIDE_CHANGELOG: "1"
       FASTLANE_DISABLE_COLORS: "1"
     steps:
+      - name: Checkout workflow scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: ci
+          persist-credentials: false
+
       - name: Required secrets
         env:
           PRIVATE_REPO: ${{ secrets.PRIVATE_REPO }}
@@ -64,13 +70,9 @@ jobs:
           done
           [ -z "$MISSING" ] || { echo "Missing:$MISSING"; exit 1; }
 
-      - name: Checkout workflow scripts
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: ci
-          persist-credentials: false
-
       - name: Private repo access
+        id: private
+        if: always()
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ secrets.PRIVATE_REPO }}
@@ -80,6 +82,7 @@ jobs:
           show-progress: false
 
       - name: Project type
+        if: always() && steps.private.outcome == 'success'
         env:
           SRC: ${{ github.workspace }}/src
         run: |
