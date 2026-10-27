@@ -1,0 +1,147 @@
+name: iOS TestFlight
+
+# Builds an app from its PRIVATE repo (reached with the PRIVATE_REPO_TOKEN
+# secret) on a free macOS runner and uploads it to TestFlight.
+# Actions tab -> "iOS TestFlight" -> Run workflow -> pick the app.
+#
+# Every app value (private repo, bundle id, Apple keys, certificate, profile)
+# lives in the GitHub environment named like the app (suum / pillowo / splik);
+# this public repo holds no app code or app details. Build output stays on the
+# runner, nothing is uploaded as an artifact, and the run's logs are deleted
+# when it ends (delete-run-logs.yml).
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: App
+        type: choice
+        options: [suum, pillowo, splik]
+      ref:
+        description: Branch / tag / commit of the private repo (empty = its default branch)
+        required: false
+        default: ""
+      version:
+        description: Version (e.g. 1.4.0; empty = the version in the project)
+        required: false
+        default: ""
+      build_number:
+        description: Build number (empty = automatic, always higher than the last one)
+        required: false
+        default: ""
+      changelog:
+        description: What to Test text for testers (optional)
+        required: false
+        default: ""
+      no_encryption:
+        description: App uses no non-exempt encryption (answers the export-compliance question)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ inputs.app }}
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    name: ${{ inputs.app }} -> TestFlight
+    runs-on: macos-26
+    timeout-minutes: 90
+    environment: ${{ inputs.app }}
+    env:
+      BUNDLE_ID: ${{ secrets.BUNDLE_ID }}
+      TEAM_ID: ${{ secrets.TEAM_ID }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      APP_DIR: ${{ secrets.APP_DIR }}
+      IOS_WORKSPACE: ${{ secrets.IOS_WORKSPACE }}
+      IOS_SCHEME: ${{ secrets.IOS_SCHEME }}
+      IOS_CONFIGURATION: ${{ secrets.IOS_CONFIGURATION }}
+      WEB_BUILD_CMD: ${{ secrets.WEB_BUILD_CMD }}
+    steps:
+      - name: Checkout workflow scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: ci
+          persist-credentials: false
+
+      - name: Checkout private app repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ secrets.PRIVATE_REPO }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: src
+          persist-credentials: false
+          show-progress: false
+
+      - name: Detect project type
+        id: detect
+        env:
+          SRC: ${{ github.workspace }}/src
+        run: bash ci/scripts/detect.sh
+
+      - name: Set up Node
+        if: steps.detect.outputs.node_version != ''
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ steps.detect.outputs.node_version }}
+
+      - name: Set up Flutter
+        if: steps.detect.outputs.type == 'flutter'
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ vars.FLUTTER_VERSION }}
+
+      - name: Signing
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          CERTIFICATES_P12: ${{ secrets.CERTIFICATES_P12 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          BUILD_PROVISION_PROFILE: ${{ secrets.BUILD_PROVISION_PROFILE }}
+        run: bash ci/scripts/signing.sh
+
+      # Year + day of year + time (yyDDDHHMM): always higher than the previous
+      # build and below Apple's 32-bit limit.
+      - name: Build number
+        env:
+          INPUT_BUILD: ${{ inputs.build_number }}
+        run: |
+          B="${INPUT_BUILD:-$(date -u +%y%j%H%M)}"
+          case "$B" in ''|*[!0-9.]*) echo "Invalid build number"; exit 1 ;; esac
+          echo "BUILD_NUMBER=$B" >> "$GITHUB_ENV"
+          echo "Build number: $B"
+
+      - name: Build .ipa
+        env:
+          TYPE: ${{ steps.detect.outputs.type }}
+          APP_ROOT: ${{ steps.detect.outputs.app_root }}
+          IOS_DIR: ${{ steps.detect.outputs.ios_dir }}
+          APP_VERSION: ${{ inputs.version }}
+          NO_ENCRYPTION: ${{ inputs.no_encryption }}
+        run: bash ci/scripts/build.sh
+
+      - name: Upload to TestFlight
+        working-directory: ci
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          CHANGELOG: ${{ inputs.changelog }}
+          FASTLANE_SKIP_UPDATE_CHECK: "1"
+          FASTLANE_HIDE_CHANGELOG: "1"
+          FASTLANE_DISABLE_COLORS: "1"
+        run: |
+          fastlane upload_testflight > "$RUNNER_TEMP/upload.log" 2>&1 || {
+            echo "Upload failed:"; grep -iE 'error|invalid|ITMS-' "$RUNNER_TEMP/upload.log" | tail -n 30; exit 1; }
+          echo "Uploaded. Apple processes the build in ~5-30 min, then it shows in TestFlight." | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean up
+        if: always()
+        run: |
+          [ -n "${KEYCHAIN_PATH:-}" ] && security delete-keychain "$KEYCHAIN_PATH" || true
+          rm -rf "$RUNNER_TEMP"/private_keys "$RUNNER_TEMP"/*.p12 "$RUNNER_TEMP"/*.mobileprovision \
+            "$RUNNER_TEMP"/export "$RUNNER_TEMP"/app.xcarchive \
+            "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" src

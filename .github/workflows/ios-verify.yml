@@ -1,0 +1,145 @@
+name: iOS Verify Setup
+
+# Checks that an app is ready to build, WITHOUT building or uploading:
+# secrets present, private repo reachable, project type found, certificate +
+# profile valid and matching, App Store Connect key works and the app exists.
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: App
+        type: choice
+        options: [all, suum, pillowo, splik]
+      check_production:
+        description: Also check the <app>-production environment (asks for approval)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  apps:
+    runs-on: ubuntu-latest
+    outputs:
+      list: ${{ steps.list.outputs.list }}
+    steps:
+      - id: list
+        env:
+          APP: ${{ inputs.app }}
+        run: |
+          if [ "$APP" = all ]; then echo 'list=["suum","pillowo","splik"]' >> "$GITHUB_OUTPUT"
+          else echo "list=[\"$APP\"]" >> "$GITHUB_OUTPUT"; fi
+
+  verify:
+    name: verify ${{ matrix.app }}
+    needs: apps
+    runs-on: macos-26
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.apps.outputs.list) }}
+    environment: ${{ matrix.app }}
+    env:
+      BUNDLE_ID: ${{ secrets.BUNDLE_ID }}
+      TEAM_ID: ${{ secrets.TEAM_ID }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+      APP_DIR: ${{ secrets.APP_DIR }}
+      FASTLANE_SKIP_UPDATE_CHECK: "1"
+      FASTLANE_HIDE_CHANGELOG: "1"
+      FASTLANE_DISABLE_COLORS: "1"
+    steps:
+      - name: Required secrets
+        env:
+          PRIVATE_REPO: ${{ secrets.PRIVATE_REPO }}
+          PRIVATE_REPO_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN }}
+        run: |
+          MISSING=""
+          for n in PRIVATE_REPO PRIVATE_REPO_TOKEN BUNDLE_ID ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do
+            [ -n "${!n}" ] && echo "  OK    $n" || { echo "  FAIL  $n missing"; MISSING="$MISSING $n"; }
+          done
+          [ -z "$MISSING" ] || { echo "Missing:$MISSING"; exit 1; }
+
+      - name: Checkout workflow scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: ci
+          persist-credentials: false
+
+      - name: Private repo access
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ secrets.PRIVATE_REPO }}
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: src
+          persist-credentials: false
+          show-progress: false
+
+      - name: Project type
+        env:
+          SRC: ${{ github.workspace }}/src
+        run: |
+          bash ci/scripts/detect.sh
+          D="$(grep '^ios_dir=' "$GITHUB_OUTPUT" | cut -d= -f2-)"
+          T="$(grep '^type=' "$GITHUB_OUTPUT" | cut -d= -f2-)"
+          case "$T" in expo) echo "  OK    Expo app (ios folder is generated at build time)"; exit 0 ;; esac
+          if [ -d "$D" ] && find "$D" -maxdepth 2 \( -name '*.xcodeproj' -o -name '*.xcworkspace' \) | grep -q .; then
+            echo "  OK    iOS project found"
+          else
+            echo "  FAIL  no iOS project in the app folder - check APP_DIR / IOS_WORKSPACE"; exit 1
+          fi
+
+      - name: Certificate and profile
+        if: always()
+        env:
+          CERTIFICATES_P12: ${{ secrets.CERTIFICATES_P12 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          BUILD_PROVISION_PROFILE: ${{ secrets.BUILD_PROVISION_PROFILE }}
+        run: bash ci/scripts/signing.sh
+
+      - name: App Store Connect key and app
+        if: always()
+        working-directory: ci
+        run: |
+          fastlane verify_asc > "$RUNNER_TEMP/asc.log" 2>&1 || {
+            echo "  FAIL"; grep -iE 'error|could not|invalid|unauthor|forbidden' "$RUNNER_TEMP/asc.log" | tail -n 15; exit 1; }
+          grep -E 'App Store Connect OK' "$RUNNER_TEMP/asc.log"
+
+      - name: Clean up
+        if: always()
+        run: |
+          [ -n "${KEYCHAIN_PATH:-}" ] && security delete-keychain "$KEYCHAIN_PATH" || true
+          rm -rf "$RUNNER_TEMP"/private_keys src
+
+  production:
+    name: verify ${{ matrix.app }}-production
+    if: inputs.check_production
+    needs: apps
+    runs-on: macos-26
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.apps.outputs.list) }}
+    environment: ${{ matrix.app }}-production
+    steps:
+      - name: Checkout workflow scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: App Store Connect key and app
+        env:
+          BUNDLE_ID: ${{ secrets.BUNDLE_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          FASTLANE_SKIP_UPDATE_CHECK: "1"
+          FASTLANE_DISABLE_COLORS: "1"
+        run: |
+          fastlane verify_asc > "$RUNNER_TEMP/asc.log" 2>&1 || {
+            echo "  FAIL"; grep -iE 'error|could not|invalid|unauthor|forbidden' "$RUNNER_TEMP/asc.log" | tail -n 15; exit 1; }
+          grep -E 'App Store Connect OK' "$RUNNER_TEMP/asc.log"

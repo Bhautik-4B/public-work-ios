@@ -1,0 +1,30 @@
+name: Delete run logs
+
+# This repo is public, so anyone could read a run's logs. As soon as an iOS
+# run ends its logs are deleted. To keep them (for debugging a failure) set the
+# repository variable KEEP_LOGS to true, re-run, then delete the variable.
+
+on:
+  workflow_run:
+    workflows: [iOS TestFlight, iOS Production, iOS Verify Setup]
+    types: [completed]
+
+permissions:
+  actions: write
+
+jobs:
+  delete:
+    if: vars.KEEP_LOGS != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Delete logs of the finished run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          for i in 1 2 3 4 5; do
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/logs" && exit 0
+            sleep 15
+          done
+          exit 1

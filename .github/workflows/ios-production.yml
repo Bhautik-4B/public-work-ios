@@ -1,0 +1,73 @@
+name: iOS Production
+
+# Sends a build that is already on TestFlight to App Store review (no rebuild).
+# Actions tab -> "iOS Production" -> Run workflow. The job waits for approval
+# in the "<app>-production" environment before it does anything.
+# The version's store listing (screenshots, description, ...) must already be
+# filled in App Store Connect; this only attaches the build and submits.
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: App
+        type: choice
+        options: [suum, pillowo, splik]
+      version:
+        description: Version to submit (e.g. 1.4.0; empty together with build = latest TestFlight build)
+        required: false
+        default: ""
+      build_number:
+        description: TestFlight build number (empty together with version = latest)
+        required: false
+        default: ""
+      release_notes:
+        description: What's New text (required by Apple for updates if not already filled in)
+        required: false
+        default: ""
+      auto_release:
+        description: Release automatically as soon as Apple approves
+        type: boolean
+        default: false
+      phased_release:
+        description: Phased release over 7 days
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ inputs.app }}-production
+  cancel-in-progress: false
+
+jobs:
+  production:
+    name: ${{ inputs.app }} -> App Store review
+    runs-on: macos-26
+    timeout-minutes: 30
+    environment: ${{ inputs.app }}-production
+    steps:
+      - name: Checkout workflow scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Submit for review
+        env:
+          BUNDLE_ID: ${{ secrets.BUNDLE_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          APP_VERSION: ${{ inputs.version }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+          AUTO_RELEASE: ${{ inputs.auto_release }}
+          PHASED_RELEASE: ${{ inputs.phased_release }}
+          FASTLANE_SKIP_UPDATE_CHECK: "1"
+          FASTLANE_HIDE_CHANGELOG: "1"
+          FASTLANE_DISABLE_COLORS: "1"
+        run: |
+          fastlane submit_production > "$RUNNER_TEMP/submit.log" 2>&1 || {
+            echo "Submit failed:"; grep -iE 'error|invalid|missing|required' "$RUNNER_TEMP/submit.log" | tail -n 30; exit 1; }
+          grep -E 'Submitting version|Submitted' "$RUNNER_TEMP/submit.log" | tee -a "$GITHUB_STEP_SUMMARY"
