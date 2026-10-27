@@ -53,6 +53,7 @@ case "$TYPE" in
     cd "$APP_ROOT"
     # Same as the old per-repo workflow: CocoaPods only, no Swift Package Manager.
     flutter config --no-enable-swift-package-manager > /dev/null 2>&1 || true
+    flutter config --no-enable-uiscene-migration > /dev/null 2>&1 || true
     mkdir -p build/ios/SourcePackages
     run flutter-pub-get flutter pub get
     run flutter-config flutter build ios --config-only --release --build-number="$BUILD_NUMBER" ${APP_VERSION:+--build-name="$APP_VERSION"}

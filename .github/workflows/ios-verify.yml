@@ -62,7 +62,7 @@ jobs:
       - name: Required secrets
         env:
           PRIVATE_REPO: ${{ secrets.PRIVATE_REPO }}
-          PRIVATE_REPO_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          PRIVATE_REPO_TOKEN: ${{ matrix.app == 'splik' && secrets.GAHAN_PRIVATE_REPO_TOKEN || secrets.PRIVATE_REPO_TOKEN }}
         run: |
           MISSING=""
           for n in PRIVATE_REPO PRIVATE_REPO_TOKEN BUNDLE_ID ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do
@@ -77,7 +77,7 @@ jobs:
         with:
           repository: ${{ secrets.PRIVATE_REPO }}
           ref: ${{ secrets.PRIVATE_REF }}
-          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          token: ${{ matrix.app == 'splik' && secrets.GAHAN_PRIVATE_REPO_TOKEN || secrets.PRIVATE_REPO_TOKEN }}
           path: src
           persist-credentials: false
           show-progress: false

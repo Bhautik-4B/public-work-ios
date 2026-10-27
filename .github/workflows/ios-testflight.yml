@@ -73,7 +73,8 @@ jobs:
         with:
           repository: ${{ secrets.PRIVATE_REPO }}
           ref: ${{ inputs.ref != '' && inputs.ref || secrets.PRIVATE_REF }}
-          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          # Splik's repo has another owner, so it has its own token.
+          token: ${{ inputs.app == 'splik' && secrets.GAHAN_PRIVATE_REPO_TOKEN || secrets.PRIVATE_REPO_TOKEN }}
           path: src
           persist-credentials: false
           show-progress: false

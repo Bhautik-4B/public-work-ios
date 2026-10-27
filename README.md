@@ -40,6 +40,7 @@ bash scripts/set-secrets.sh suum    # then pillowo, splik
 | --- | --- | --- |
 | `PRIVATE_REPO` | `<app>` | `owner/repo` of the app's private repo |
 | `PRIVATE_REPO_TOKEN` | repo-level (shared) | Read-only token for that repo (see below) |
+| `GAHAN_PRIVATE_REPO_TOKEN` | repo-level | Token for Splik's repo (different owner); used instead of `PRIVATE_REPO_TOKEN` for `splik` |
 | `PRIVATE_REF` | `<app>` | Branch built by default (optional; e.g. `testflight-productions`) |
 | `BUNDLE_ID` | both | e.g. `com.company.app` |
 | `TEAM_ID` | `<app>` | Apple Team ID (optional in manual signing: taken from the profile) |
