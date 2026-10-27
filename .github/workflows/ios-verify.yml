@@ -111,7 +111,7 @@ jobs:
         run: |
           fastlane verify_asc > "$RUNNER_TEMP/asc.log" 2>&1 || {
             echo "  FAIL"; grep -iE 'error|could not|invalid|unauthor|forbidden' "$RUNNER_TEMP/asc.log" | tail -n 15; exit 1; }
-          grep -E 'App Store Connect OK' "$RUNNER_TEMP/asc.log"
+          grep -E 'App Store Connect OK|Latest upload:|Could not read processing' "$RUNNER_TEMP/asc.log"
 
       - name: Clean up
         if: always()
