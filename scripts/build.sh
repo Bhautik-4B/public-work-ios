@@ -101,7 +101,8 @@ echo "Scheme found"
 xcodebuild -showBuildSettings "$FLAG" "$CONTAINER" -scheme "$SCHEME" -configuration "$CONFIG" -json \
   > "$LOGS/settings.json" 2> "$LOGS/settings.err" \
   || { echo "Scheme not usable - set the IOS_SCHEME secret"; tail -n 5 "$LOGS/settings.err" | grep -i error || true; exit 1; }
-eval "$(python3 - "$LOGS/settings.json" <<'PY'
+# (macOS bash 3.2 cannot parse a heredoc inside $(...): write a file, then source it)
+python3 - "$LOGS/settings.json" > "$LOGS/settings.env" <<'PY'
 import json, os, shlex, sys
 items = json.load(open(sys.argv[1]))
 want = os.environ.get("BUNDLE_ID", "")
@@ -111,7 +112,7 @@ for k, v in (("TARGET", "TARGET_NAME"), ("PROJECT_PATH", "PROJECT_FILE_PATH"), (
              ("SRCROOT_DIR", "SRCROOT"), ("PROJECT_BUNDLE_ID", "PRODUCT_BUNDLE_IDENTIFIER")):
     print(f"{k}={shlex.quote(pick.get(v, ''))}")
 PY
-)"
+. "$LOGS/settings.env"
 if [ "$PROJECT_BUNDLE_ID" != "$BUNDLE_ID" ]; then
   echo "Warning: the project's bundle id differs from the BUNDLE_ID secret"
 fi
@@ -173,9 +174,9 @@ EOF
 
 # 6. Archive + export
 run archive xcodebuild "$FLAG" "$CONTAINER" -scheme "$SCHEME" -configuration "$CONFIG" \
-  -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" "${AUTH[@]}" archive "${SETTINGS[@]}"
+  -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" ${AUTH[@]+"${AUTH[@]}"} archive "${SETTINGS[@]}"
 run export xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$EXPORT_PLIST" \
-  -exportPath "$EXPORT" "${AUTH[@]}"
+  -exportPath "$EXPORT" ${AUTH[@]+"${AUTH[@]}"}
 
 IPA="$(find "$EXPORT" -maxdepth 1 -name '*.ipa' | head -n1)"
 [ -n "$IPA" ] || { echo "No .ipa produced"; exit 1; }
