@@ -31,6 +31,13 @@ platform :ios do
     build = latest_testflight_build_number(app_identifier: ENV.fetch("BUNDLE_ID"), initial_build_number: 0)
     version = lane_context[SharedValues::LATEST_TESTFLIGHT_VERSION]
     UI.success("App Store Connect OK - latest TestFlight build: #{version || '-'} (#{build})")
+    begin
+      app = Spaceship::ConnectAPI::App.find(ENV.fetch("BUNDLE_ID"))
+      latest = Spaceship::ConnectAPI::Build.all(app_id: app.id, sort: "-uploadedDate", limit: 1).first
+      UI.message("Latest upload: #{latest.app_version} (#{latest.version}) - processing: #{latest.processing_state}") if latest
+    rescue => e
+      UI.important("Could not read processing state: #{e.class}")
+    end
   end
 
   # Upload a signed .ipa to TestFlight (does not wait for Apple's processing).
