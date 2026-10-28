@@ -66,6 +66,18 @@ platform :ios do
     UI.message("Submitting version #{version} (build #{build}) for App Store review")
 
     notes = ENV["RELEASE_NOTES"].to_s.strip
+    # Apple needs "What's New" per language of the listing; a "default" key is not applied
+    # when there is no local metadata folder, so use the languages the app already has.
+    release_notes = nil
+    unless notes.empty?
+      record = Spaceship::ConnectAPI::App.find(app)
+      listing = record.get_edit_app_store_version(platform: Spaceship::ConnectAPI::Platform::IOS) ||
+                record.get_live_app_store_version(platform: Spaceship::ConnectAPI::Platform::IOS)
+      locales = listing ? listing.get_app_store_version_localizations.map(&:locale) : []
+      locales = ["en-US"] if locales.empty?
+      UI.message("What's New set for: #{locales.join(', ')}")
+      release_notes = locales.to_h { |l| [l, notes] }
+    end
     empty_metadata = File.join(ENV.fetch("RUNNER_TEMP", "/tmp"), "empty-metadata")
     FileUtils.mkdir_p(empty_metadata)
 
@@ -77,7 +89,7 @@ platform :ios do
       skip_screenshots: true,
       skip_metadata: notes.empty?,
       metadata_path: empty_metadata,
-      release_notes: notes.empty? ? nil : { "default" => notes },
+      release_notes: release_notes,
       ignore_language_directory_validation: true,
       submit_for_review: true,
       automatic_release: ENV["AUTO_RELEASE"] == "true",

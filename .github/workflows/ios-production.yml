@@ -70,4 +70,4 @@ jobs:
         run: |
           fastlane submit_production > "$RUNNER_TEMP/submit.log" 2>&1 || {
             echo "Submit failed:"; grep -iE 'error|invalid|missing|required' "$RUNNER_TEMP/submit.log" | tail -n 30; exit 1; }
-          grep -E 'Submitting version|Submitted' "$RUNNER_TEMP/submit.log" | tee -a "$GITHUB_STEP_SUMMARY"
+          grep -E 'Submitting version|What.s New set for|Submitted' "$RUNNER_TEMP/submit.log" | tee -a "$GITHUB_STEP_SUMMARY"
