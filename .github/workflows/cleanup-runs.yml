@@ -1,0 +1,39 @@
+name: Clean up runs
+
+# This repo is public, so anyone could read a run and its logs. As soon as an
+# iOS run ends, that run and every other finished run (logs included) is
+# deleted. Only this cleanup run itself stays until the next cleanup removes it.
+# To keep a run (for debugging a failure) set the repository variable KEEP_LOGS
+# to true, re-run, then delete the variable.
+
+on:
+  workflow_run:
+    workflows: [iOS TestFlight, iOS Production, iOS Verify Setup]
+    types: [completed]
+
+permissions:
+  actions: write
+
+jobs:
+  delete:
+    if: vars.KEEP_LOGS != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Delete finished runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SELF: ${{ github.run_id }}
+        run: |
+          ids="$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?status=completed&per_page=100" \
+            -q ".workflow_runs[] | select(.id != $SELF) | .id")"
+          left=0
+          for id in $ids; do
+            for i in 1 2 3; do
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$id" > /dev/null 2>&1 && continue 2
+              sleep 5
+            done
+            left=$((left + 1))
+          done
+          echo "Deleted finished runs ($left could not be deleted)"
+          [ "$left" -eq 0 ]

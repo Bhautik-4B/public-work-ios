@@ -10,7 +10,7 @@ ids or keys are stored in this repo.
 | **iOS TestFlight** | Build the app from its private repo, sign it, upload to TestFlight |
 | **iOS Production** | Submit a build that is already on TestFlight to App Store review (needs approval) |
 | **iOS Verify Setup** | Check secrets, repo access, certificate/profile, App Store Connect key, without building |
-| Delete run logs | Deletes every iOS run's logs when it ends (public logs) |
+| Clean up runs | Deletes every finished run (and its logs) when an iOS run ends (public repo) |
 
 Apps: `suum`, `pillowo`, `splik`. Run any workflow from **Actions → workflow → Run workflow**.
 
@@ -23,7 +23,7 @@ Apps: `suum`, `pillowo`, `splik`. Run any workflow from **Actions → workflow �
   No `pull_request` triggers, fork PR runs need approval, `GITHUB_TOKEN` is read-only.
 - Actions are pinned to commit SHAs and only GitHub-owned actions + `subosito/flutter-action` are allowed.
 - Build output goes to files on the runner; only error lines are printed. Nothing is uploaded as an
-  artifact. The run's logs are **deleted automatically** when it finishes. To keep logs for debugging,
+  artifact. The run and its logs are **deleted automatically** when it finishes. To keep a run for debugging,
   set the repository variable `KEEP_LOGS=true`, re-run, then delete the variable.
 - Signing keychain, keys and profiles are deleted at the end of the job (the runner VM is also discarded).
 
