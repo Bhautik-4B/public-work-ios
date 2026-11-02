@@ -91,6 +91,19 @@ platform :ios do
       UI.important("Could not read review submissions: #{e.class}")
     end
 
+    # Raw build details (audience, min OS, bundle attributes) to compare builds.
+    begin
+      body = Spaceship::ConnectAPI.tunes_request_client.get("builds", { filter: { app: app.id }, sort: "-uploadedDate", limit: 4, include: "buildBundles" }).body
+      bundles = (body["included"] || []).select { |i| i["type"] == "buildBundles" }.to_h { |i| [i["id"], i["attributes"].reject { |k, _| k =~ /url/i }] }
+      body["data"].each do |b|
+        a = b["attributes"].reject { |k, _| k =~ /url|iconAsset/i }
+        ids = (b.dig("relationships", "buildBundles", "data") || []).map { |x| x["id"] }
+        UI.message("STATUS detail #{a['version']}: #{a.to_json} bundles: #{ids.map { |i| bundles[i] }.to_json}")
+      end
+    rescue => e
+      UI.important("Could not read build details: #{e.class} #{e.message[0, 200]}")
+    end
+
     Spaceship::ConnectAPI::Build.all(app_id: app.id, sort: "-uploadedDate", limit: 4).first(4).each do |b|
       sdk = (b.build_bundles || []).map { |x| "sdk #{x.sdk_build} platform #{x.platform_build}" }.uniq.join(", ")
       UI.message("STATUS testflight #{b.app_version} (#{b.version}) uploaded #{b.uploaded_date} - #{b.processing_state} #{sdk}")
