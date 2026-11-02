@@ -61,8 +61,9 @@ platform :ios do
       UI.important("Could not read review submissions: #{e.class}")
     end
 
-    Spaceship::ConnectAPI::Build.all(app_id: app.id, sort: "-uploadedDate", limit: 3).first(3).each do |b|
-      UI.message("STATUS testflight #{b.app_version} (#{b.version}) uploaded #{b.uploaded_date} - #{b.processing_state}")
+    Spaceship::ConnectAPI::Build.all(app_id: app.id, sort: "-uploadedDate", limit: 4).first(4).each do |b|
+      sdk = (b.build_bundles || []).map { |x| "sdk #{x.sdk_build} platform #{x.platform_build}" }.uniq.join(", ")
+      UI.message("STATUS testflight #{b.app_version} (#{b.version}) uploaded #{b.uploaded_date} - #{b.processing_state} #{sdk}")
     end
   end
 
