@@ -93,12 +93,17 @@ platform :ios do
 
     # Raw build details (audience, min OS, bundle attributes) to compare builds.
     begin
-      body = Spaceship::ConnectAPI.tunes_request_client.get("builds", { filter: { app: app.id }, sort: "-uploadedDate", limit: 4, include: "buildBundles" }).body
+      body = Spaceship::ConnectAPI.tunes_request_client.get("v1/builds", { filter: { app: app.id }, sort: "-uploadedDate", limit: 4, include: "buildBundles" }).body
       bundles = (body["included"] || []).select { |i| i["type"] == "buildBundles" }.to_h { |i| [i["id"], i["attributes"].reject { |k, _| k =~ /url/i }] }
       body["data"].each do |b|
         a = b["attributes"].reject { |k, _| k =~ /url|iconAsset/i }
         ids = (b.dig("relationships", "buildBundles", "data") || []).map { |x| x["id"] }
         UI.message("STATUS detail #{a['version']}: #{a.to_json} bundles: #{ids.map { |i| bundles[i] }.to_json}")
+      end
+      vbody = Spaceship::ConnectAPI.tunes_request_client.get("v1/apps/#{app.id}/appStoreVersions", { limit: 3 }).body
+      vbody["data"].each do |v|
+        a = v["attributes"]
+        UI.message("STATUS detail version #{a['versionString']}: appStoreState #{a['appStoreState']}, appVersionState #{a['appVersionState']}")
       end
     rescue => e
       UI.important("Could not read build details: #{e.class} #{e.message[0, 200]}")
