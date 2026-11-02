@@ -69,5 +69,5 @@ jobs:
           FASTLANE_DISABLE_COLORS: "1"
         run: |
           fastlane submit_production > "$RUNNER_TEMP/submit.log" 2>&1 || {
-            echo "Submit failed:"; grep -iE 'error|invalid|missing|required' "$RUNNER_TEMP/submit.log" | tail -n 30; exit 1; }
+            echo "Submit failed:"; grep -vE 'ASC_KEY|PRIVATE KEY' "$RUNNER_TEMP/submit.log" | tail -n 40; exit 1; }
           grep -E 'Submitting version|What.s New set for|Submitted' "$RUNNER_TEMP/submit.log" | tee -a "$GITHUB_STEP_SUMMARY"
