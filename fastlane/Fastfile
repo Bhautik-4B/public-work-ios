@@ -105,6 +105,13 @@ platform :ios do
       UI.message("What's New set for: #{locales.join(', ')}")
       release_notes = locales.to_h { |l| [l, notes] }
     end
+    # A rejected submission stays open as UNRESOLVED_ISSUES and blocks a new one;
+    # Apple expects that same submission to be resubmitted after fixing.
+    rejected = Spaceship::ConnectAPI::App.find(app)
+                                     .get_review_submissions(filter: { platform: "IOS", state: "UNRESOLVED_ISSUES" })
+                                     .first
+    UI.message("Open rejected submission found - it will be resubmitted") if rejected
+
     empty_metadata = File.join(ENV.fetch("RUNNER_TEMP", "/tmp"), "empty-metadata")
     FileUtils.mkdir_p(empty_metadata)
 
@@ -118,7 +125,7 @@ platform :ios do
       metadata_path: empty_metadata,
       release_notes: release_notes,
       ignore_language_directory_validation: true,
-      submit_for_review: true,
+      submit_for_review: rejected.nil?,
       automatic_release: ENV["AUTO_RELEASE"] == "true",
       phased_release: ENV["PHASED_RELEASE"] == "true",
       run_precheck_before_submit: false,
@@ -126,6 +133,10 @@ platform :ios do
       force: true,
       submission_information: { add_id_info_uses_idfa: false }
     )
+    if rejected
+      rejected.submit_for_review
+      UI.message("Resubmitted the rejected submission")
+    end
     UI.success("Submitted #{version} (#{build}) for review")
   end
 end
