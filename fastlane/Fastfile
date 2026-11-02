@@ -25,6 +25,36 @@ platform :ios do
     )
   end
 
+  def apple_error(e)
+    e.respond_to?(:error_info) && e.error_info ? e.error_info.to_json : e.message
+  end
+
+  # Resubmit the open rejected submission; if Apple refuses, cancel it and
+  # submit the edit version in a new submission.
+  def resubmit_rejected(bundle_id, rejected)
+    rejected.submit_for_review
+    UI.message("Resubmitted the rejected submission")
+  rescue Spaceship::UnexpectedResponse => e
+    UI.important("Resubmit refused: #{apple_error(e)}")
+    rejected.cancel_submission
+    20.times do
+      state = Spaceship::ConnectAPI::ReviewSubmission.get(review_submission_id: rejected.id).state rescue "COMPLETE"
+      break unless %w[UNRESOLVED_ISSUES CANCELING].include?(state)
+      sleep 6
+    end
+    UI.message("Cancelled the rejected submission")
+    record = Spaceship::ConnectAPI::App.find(bundle_id)
+    version = record.get_edit_app_store_version(platform: Spaceship::ConnectAPI::Platform::IOS)
+    begin
+      submission = record.create_review_submission(platform: Spaceship::ConnectAPI::Platform::IOS)
+      submission.add_app_store_version_to_review_items(app_store_version_id: version.id)
+      submission.submit_for_review
+      UI.message("Submitted in a new review submission")
+    rescue Spaceship::UnexpectedResponse => e2
+      UI.user_error!("New submission refused: #{apple_error(e2)}")
+    end
+  end
+
   # Key works and the app record exists in App Store Connect.
   lane :verify_asc do
     asc_key
@@ -133,10 +163,7 @@ platform :ios do
       force: true,
       submission_information: { add_id_info_uses_idfa: false }
     )
-    if rejected
-      rejected.submit_for_review
-      UI.message("Resubmitted the rejected submission")
-    end
+    resubmit_rejected(app, rejected) if rejected
     UI.success("Submitted #{version} (#{build}) for review")
   end
 end
