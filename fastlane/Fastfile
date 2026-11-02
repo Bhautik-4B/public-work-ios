@@ -54,14 +54,14 @@ platform :ios do
     end
 
     begin
-      app.get_review_submissions(filter: { platform: "IOS" }, limit: 5).each do |r|
+      app.get_review_submissions(filter: { platform: "IOS" }, limit: 5).first(3).each do |r|
         UI.message("STATUS review submission #{r.submitted_date || '-'} - #{r.state}")
       end
     rescue => e
       UI.important("Could not read review submissions: #{e.class}")
     end
 
-    Spaceship::ConnectAPI::Build.all(app_id: app.id, sort: "-uploadedDate", limit: 3).each do |b|
+    Spaceship::ConnectAPI::Build.all(app_id: app.id, sort: "-uploadedDate", limit: 3).first(3).each do |b|
       UI.message("STATUS testflight #{b.app_version} (#{b.version}) uploaded #{b.uploaded_date} - #{b.processing_state}")
     end
   end
