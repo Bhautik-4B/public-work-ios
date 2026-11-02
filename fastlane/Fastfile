@@ -40,6 +40,32 @@ platform :ios do
     end
   end
 
+  # Read-only: App Store versions with their review state, open review
+  # submissions and the latest TestFlight uploads. Changes nothing.
+  lane :status do
+    asc_key
+    app = Spaceship::ConnectAPI::App.find(ENV.fetch("BUNDLE_ID"))
+    UI.user_error!("App not found in App Store Connect") unless app
+
+    versions = app.get_app_store_versions(filter: { platform: "IOS" }, includes: "build", limit: 5) || []
+    versions.sort_by { |v| v.created_date.to_s }.reverse.first(5).each do |v|
+      build = v.build ? " build #{v.build.version}" : ""
+      UI.message("STATUS version #{v.version_string}#{build} - #{v.app_store_state} (release: #{v.release_type})")
+    end
+
+    begin
+      app.get_review_submissions(filter: { platform: "IOS" }, limit: 5).each do |r|
+        UI.message("STATUS review submission #{r.submitted_date || '-'} - #{r.state}")
+      end
+    rescue => e
+      UI.important("Could not read review submissions: #{e.class}")
+    end
+
+    Spaceship::ConnectAPI::Build.all(app_id: app.id, sort: "-uploadedDate", limit: 3).each do |b|
+      UI.message("STATUS testflight #{b.app_version} (#{b.version}) uploaded #{b.uploaded_date} - #{b.processing_state}")
+    end
+  end
+
   # Upload a signed .ipa to TestFlight (does not wait for Apple's processing).
   lane :upload_testflight do
     asc_key

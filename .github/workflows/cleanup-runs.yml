@@ -8,7 +8,7 @@ name: Clean up runs
 
 on:
   workflow_run:
-    workflows: [iOS TestFlight, iOS Production, iOS Verify Setup]
+    workflows: [iOS TestFlight, iOS Production, iOS Verify Setup, iOS Status]
     types: [completed]
 
 permissions:

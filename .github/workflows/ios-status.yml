@@ -1,0 +1,42 @@
+name: iOS Status
+
+# Read-only: shows the App Store review state of an app's versions and its
+# latest TestFlight uploads. Builds nothing, submits nothing, needs no
+# approval. Actions tab -> "iOS Status" -> Run workflow -> pick the app.
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: App
+        type: choice
+        options: [suum, pillowo, splik]
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    name: ${{ inputs.app }} status
+    runs-on: macos-26
+    timeout-minutes: 15
+    environment: ${{ inputs.app }}
+    steps:
+      - name: Checkout workflow scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: App Store Connect status
+        env:
+          BUNDLE_ID: ${{ secrets.BUNDLE_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          FASTLANE_SKIP_UPDATE_CHECK: "1"
+          FASTLANE_HIDE_CHANGELOG: "1"
+          FASTLANE_DISABLE_COLORS: "1"
+        run: |
+          fastlane status > "$RUNNER_TEMP/status.log" 2>&1 || {
+            echo "Status failed:"; grep -iE 'error|could not|invalid|unauthor|forbidden' "$RUNNER_TEMP/status.log" | tail -n 20; exit 1; }
+          grep -E 'STATUS|Could not read' "$RUNNER_TEMP/status.log" | sed 's/.*STATUS /- /' | tee -a "$GITHUB_STEP_SUMMARY"
