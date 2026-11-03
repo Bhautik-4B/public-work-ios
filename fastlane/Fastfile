@@ -115,6 +115,28 @@ platform :ios do
     end
   end
 
+  # Prints the app's age rating answers; with AGE_RATING_SET (JSON of
+  # attribute => value) it fills in only those answers first.
+  lane :age_rating do
+    asc_key
+    client = Spaceship::ConnectAPI.tunes_request_client
+    app = Spaceship::ConnectAPI::App.find(ENV.fetch("BUNDLE_ID"))
+    infos = client.get("v1/apps/#{app.id}/appInfos").body["data"]
+    info = infos.find { |i| i.dig("attributes", "appStoreState") != "READY_FOR_SALE" } || infos.first
+    decl = client.get("v1/appInfos/#{info['id']}/ageRatingDeclaration").body["data"]
+    UI.message("AGE current #{decl['attributes'].to_json}")
+    set = ENV["AGE_RATING_SET"].to_s.strip
+    unless set.empty?
+      body = { data: { type: "ageRatingDeclarations", id: decl["id"], attributes: JSON.parse(set) } }
+      begin
+        res = client.patch("v1/ageRatingDeclarations/#{decl['id']}", body).body
+        UI.message("AGE updated #{res.dig('data', 'attributes').to_json}")
+      rescue Spaceship::UnexpectedResponse => e
+        UI.user_error!("AGE update refused: #{apple_error(e)}")
+      end
+    end
+  end
+
   # Upload a signed .ipa to TestFlight (does not wait for Apple's processing).
   lane :upload_testflight do
     asc_key

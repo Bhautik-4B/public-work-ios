@@ -1,0 +1,47 @@
+name: iOS Age Rating
+
+# Shows an app's App Store age rating answers. To fill in missing answers
+# (Apple adds new questions over time), pass them as JSON in "set",
+# e.g. {"socialMedia": false}. Only the given answers are changed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: App
+        type: choice
+        options: [suum, pillowo, splik]
+      set:
+        description: 'Answers to set as JSON (empty = only show)'
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  age-rating:
+    name: ${{ inputs.app }} age rating
+    runs-on: macos-26
+    timeout-minutes: 15
+    environment: ${{ inputs.app }}
+    steps:
+      - name: Checkout workflow scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Age rating
+        env:
+          BUNDLE_ID: ${{ secrets.BUNDLE_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          AGE_RATING_SET: ${{ inputs.set }}
+          FASTLANE_SKIP_UPDATE_CHECK: "1"
+          FASTLANE_HIDE_CHANGELOG: "1"
+          FASTLANE_DISABLE_COLORS: "1"
+        run: |
+          fastlane age_rating > "$RUNNER_TEMP/age.log" 2>&1 || {
+            echo "Age rating failed:"; grep -E 'AGE|\[!\]|refused' "$RUNNER_TEMP/age.log" | tail -n 20; exit 1; }
+          grep -E 'AGE ' "$RUNNER_TEMP/age.log" | sed 's/.*AGE /- /' | tee -a "$GITHUB_STEP_SUMMARY"
