@@ -25,6 +25,33 @@ platform :ios do
     )
   end
 
+  # Attach the requested TestFlight build to the editable App Store version.
+  def ensure_build(bundle_id, version, build_number)
+    record = Spaceship::ConnectAPI::App.find(bundle_id)
+    edit = record.get_edit_app_store_version(platform: Spaceship::ConnectAPI::Platform::IOS, includes: "build")
+    UI.user_error!("No editable App Store version found") unless edit
+    return if edit.build && edit.build.version == build_number
+    b = Spaceship::ConnectAPI::Build.all(app_id: record.id, version: version, build_number: build_number,
+                                         platform: Spaceship::ConnectAPI::Platform::IOS).first
+    UI.user_error!("Build #{version} (#{build_number}) not found") unless b
+    edit.select_build(build_id: b.id)
+    UI.message("Attached build #{version} (#{build_number})")
+  end
+
+  # Cancel a submission that is still waiting for review (to replace its build).
+  def cancel_waiting(bundle_id)
+    record = Spaceship::ConnectAPI::App.find(bundle_id)
+    waiting = record.get_review_submissions(filter: { platform: "IOS", state: "WAITING_FOR_REVIEW" }).first
+    return unless waiting
+    waiting.cancel_submission
+    20.times do
+      state = Spaceship::ConnectAPI::ReviewSubmission.get(review_submission_id: waiting.id).state rescue "COMPLETE"
+      break unless %w[WAITING_FOR_REVIEW CANCELING].include?(state)
+      sleep 6
+    end
+    UI.message("Cancelled the submission that was waiting for review")
+  end
+
   def apple_error(e)
     e.respond_to?(:error_info) && e.error_info ? e.error_info.to_json : e.message
   end
@@ -175,6 +202,8 @@ platform :ios do
       UI.message("What's New set for: #{locales.join(', ')}")
       release_notes = locales.to_h { |l| [l, notes] }
     end
+    cancel_waiting(app) if ENV["REPLACE_WAITING"] == "true"
+
     # A rejected submission stays open as UNRESOLVED_ISSUES and blocks a new one;
     # Apple expects that same submission to be resubmitted after fixing.
     rejected = Spaceship::ConnectAPI::App.find(app)
@@ -211,7 +240,10 @@ platform :ios do
       force: true,
       submission_information: { add_id_info_uses_idfa: false }
     )
-    resubmit_rejected(app, rejected) if rejected
+    if rejected
+      ensure_build(app, version, build)
+      resubmit_rejected(app, rejected)
+    end
     UI.success("Submitted #{version} (#{build}) for review")
   end
 end
