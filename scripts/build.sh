@@ -22,7 +22,9 @@ run() {
   echo "> $name"
   if ! "$@" > "$LOGS/$name.log" 2>&1; then
     echo "$name failed. Errors:"
-    grep -E '(error|Error|ERROR|failed|Failed)[: ]' "$LOGS/$name.log" | grep -v '^\s*$' | tail -n 40 || tail -n 20 "$LOGS/$name.log"
+    grep -E '(error|Error|ERROR|failed|Failed)[: ]' "$LOGS/$name.log" | grep -v '^\s*$' | tail -n 40 || true
+    echo "--- last lines of $name ---"
+    tail -n 40 "$LOGS/$name.log"
     exit 1
   fi
 }
