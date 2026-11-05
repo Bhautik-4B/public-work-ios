@@ -25,6 +25,10 @@ on:
         description: What's New text (required by Apple for updates if not already filled in)
         required: false
         default: ""
+      review_notes:
+        description: Notes for App Review (sign-in steps etc.; empty = keep current)
+        required: false
+        default: ""
       auto_release:
         description: Release automatically as soon as Apple approves
         type: boolean
@@ -62,6 +66,7 @@ jobs:
           APP_VERSION: ${{ inputs.version }}
           BUILD_NUMBER: ${{ inputs.build_number }}
           RELEASE_NOTES: ${{ inputs.release_notes }}
+          REVIEW_NOTES: ${{ inputs.review_notes }}
           AUTO_RELEASE: ${{ inputs.auto_release }}
           PHASED_RELEASE: ${{ inputs.phased_release }}
           FASTLANE_SKIP_UPDATE_CHECK: "1"
@@ -70,4 +75,4 @@ jobs:
         run: |
           fastlane submit_production > "$RUNNER_TEMP/submit.log" 2>&1 || {
             echo "Submit failed:"; grep -vE 'ASC_KEY|PRIVATE KEY' "$RUNNER_TEMP/submit.log" | tail -n 40; exit 1; }
-          grep -E 'Submitting version|What.s New set for|rejected submission|Resubmit|Cancelled|new review submission|refused|Submitted' "$RUNNER_TEMP/submit.log" | tee -a "$GITHUB_STEP_SUMMARY"
+          grep -E 'Submitting version|What.s New set for|rejected submission|App Review notes|Resubmit|Cancelled|new review submission|refused|Submitted' "$RUNNER_TEMP/submit.log" | tee -a "$GITHUB_STEP_SUMMARY"

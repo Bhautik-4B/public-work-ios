@@ -182,6 +182,14 @@ platform :ios do
                                      .first
     UI.message("Open rejected submission found - it will be resubmitted") if rejected
 
+    review_notes = ENV["REVIEW_NOTES"].to_s.strip
+    unless review_notes.empty?
+      edit = Spaceship::ConnectAPI::App.find(app).get_edit_app_store_version(platform: Spaceship::ConnectAPI::Platform::IOS)
+      detail = edit.fetch_app_store_review_detail
+      detail.update(attributes: { notes: review_notes })
+      UI.message("App Review notes updated")
+    end
+
     empty_metadata = File.join(ENV.fetch("RUNNER_TEMP", "/tmp"), "empty-metadata")
     FileUtils.mkdir_p(empty_metadata)
 
